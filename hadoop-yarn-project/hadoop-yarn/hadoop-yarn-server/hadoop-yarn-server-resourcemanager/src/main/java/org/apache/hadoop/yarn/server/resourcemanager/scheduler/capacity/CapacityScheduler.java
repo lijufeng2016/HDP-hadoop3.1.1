@@ -460,6 +460,7 @@ public class CapacityScheduler extends
   @Override
   public void reinitialize(Configuration newConf, RMContext rmContext)
       throws IOException {
+    writeLock.lock();
     try {
       Configuration configuration = new Configuration(newConf);
       CapacitySchedulerConfiguration oldConf = this.conf;
