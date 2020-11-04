@@ -461,7 +461,6 @@ public class CapacityScheduler extends
   public void reinitialize(Configuration newConf, RMContext rmContext)
       throws IOException {
     try {
-      writeLock.lock();
       Configuration configuration = new Configuration(newConf);
       CapacitySchedulerConfiguration oldConf = this.conf;
       this.conf = csConfProvider.loadConfiguration(configuration);
