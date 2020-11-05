@@ -1658,12 +1658,10 @@ public class LeafQueue extends AbstractCSQueue {
 
     if (application != null) {
       boolean removed = false;
-
       // Careful! Locking order is important!
+      writeLock.lock();
       try {
-        writeLock.lock();
         Container container = rmContainer.getContainer();
-
         // Inform the application & the node
         // Note: It's safe to assume that all state changes to RMContainer
         // happen under scheduler's lock...
