@@ -345,11 +345,6 @@ public interface CSQueue extends SchedulerQueue<CSQueue> {
   void apply(Resource cluster,
       ResourceCommitRequest<FiCaSchedulerApp, FiCaSchedulerNode> request);
 
-  /**
-   * Get readLock associated with the Queue.
-   * @return readLock of corresponding queue.
-   */
-  public ReentrantReadWriteLock.ReadLock getReadLock();
 
   /**
    * Validate submitApplication api so that moveApplication do a pre-check.

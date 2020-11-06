@@ -52,17 +52,11 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
   }
 
   @Override
-  public void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
+  public synchronized void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
       throws IOException {
-    try {
-      writeLock.lock();
-
       // Set new configs
       setupQueueConfigs(clusterResource);
 
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   /**
@@ -70,10 +64,8 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
    * @param childQueue reference to the child queue to be added
    * @throws SchedulerDynamicEditException
    */
-  public void addChildQueue(CSQueue childQueue)
+  public synchronized void addChildQueue(CSQueue childQueue)
       throws SchedulerDynamicEditException, IOException {
-    try {
-      writeLock.lock();
       if (childQueue.getCapacity() > 0) {
         throw new SchedulerDynamicEditException(
             "Queue " + childQueue + " being added has non zero capacity.");
@@ -83,9 +75,6 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
         LOG.debug("updateChildQueues (action: add queue): " + added + " "
             + getChildQueuesToPrint());
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   /**
@@ -93,10 +82,8 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
    * @param childQueue reference to the child queue to be removed
    * @throws SchedulerDynamicEditException
    */
-  public void removeChildQueue(CSQueue childQueue)
+  public synchronized void removeChildQueue(CSQueue childQueue)
       throws SchedulerDynamicEditException {
-    try {
-      writeLock.lock();
       if (childQueue.getCapacity() > 0) {
         throw new SchedulerDynamicEditException(
             "Queue " + childQueue + " being removed has non zero capacity.");
@@ -111,9 +98,6 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
           }
         }
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   /**
@@ -121,11 +105,9 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
    * @param childQueueName name of the child queue to be removed
    * @throws SchedulerDynamicEditException
    */
-  public CSQueue removeChildQueue(String childQueueName)
+  public synchronized CSQueue removeChildQueue(String childQueueName)
       throws SchedulerDynamicEditException {
     CSQueue childQueue;
-    try {
-      writeLock.lock();
       childQueue = this.csContext.getCapacitySchedulerQueueManager().getQueue(
           childQueueName);
       if (childQueue != null) {
@@ -134,36 +116,23 @@ public abstract class AbstractManagedParentQueue extends ParentQueue {
         throw new SchedulerDynamicEditException("Cannot find queue to delete "
             + ": " + childQueueName);
       }
-    } finally {
-      writeLock.unlock();
-    }
     return childQueue;
   }
 
-  protected float sumOfChildCapacities() {
-    try {
-      writeLock.lock();
+  protected synchronized float sumOfChildCapacities() {
       float ret = 0;
       for (CSQueue l : childQueues) {
         ret += l.getCapacity();
       }
       return ret;
-    } finally {
-      writeLock.unlock();
-    }
   }
 
-  protected float sumOfChildAbsCapacities() {
-    try {
-      writeLock.lock();
+  protected synchronized float sumOfChildAbsCapacities() {
       float ret = 0;
       for (CSQueue l : childQueues) {
         ret += l.getAbsoluteCapacity();
       }
       return ret;
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   public AutoCreatedLeafQueueConfig getLeafQueueTemplate() {

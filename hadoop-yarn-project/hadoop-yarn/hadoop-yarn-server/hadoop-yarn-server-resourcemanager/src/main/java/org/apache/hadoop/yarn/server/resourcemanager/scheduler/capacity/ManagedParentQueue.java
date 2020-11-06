@@ -73,11 +73,10 @@ public class ManagedParentQueue extends AbstractManagedParentQueue {
   }
 
   @Override
-  public void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
+  public synchronized void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
       throws IOException {
 
     try {
-      writeLock.lock();
       validate(newlyParsedQueue);
 
       shouldFailAutoCreationWhenGuaranteedCapacityExceeded =
@@ -127,8 +126,6 @@ public class ManagedParentQueue extends AbstractManagedParentQueue {
       LOG.error("Exception while computing policy changes for leaf queue : "
           + getQueueName(), ye);
       throw new IOException(ye);
-    } finally {
-      writeLock.unlock();
     }
   }
 
@@ -186,11 +183,8 @@ public class ManagedParentQueue extends AbstractManagedParentQueue {
   }
 
   @Override
-  public void addChildQueue(CSQueue childQueue)
+  public synchronized void addChildQueue(CSQueue childQueue)
       throws SchedulerDynamicEditException, IOException {
-    try {
-      writeLock.lock();
-
       if (childQueue == null || !(childQueue instanceof AutoCreatedLeafQueue)) {
         throw new SchedulerDynamicEditException(
             "Expected child queue to be an instance of AutoCreatedLeafQueue");
@@ -229,48 +223,35 @@ public class ManagedParentQueue extends AbstractManagedParentQueue {
           queueManagementPolicy.getInitialLeafQueueConfiguration(leafQueue);
 
       leafQueue.reinitializeFromTemplate(initialLeafQueueTemplate);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
-  public List<FiCaSchedulerApp> getScheduleableApplications() {
-    try {
-      readLock.lock();
+  public synchronized List<FiCaSchedulerApp> getScheduleableApplications() {
+
       List<FiCaSchedulerApp> apps = new ArrayList<>();
       for (CSQueue childQueue : getChildQueues()) {
         apps.addAll(((LeafQueue) childQueue).getApplications());
       }
       return Collections.unmodifiableList(apps);
-    } finally {
-      readLock.unlock();
-    }
   }
 
-  public List<FiCaSchedulerApp> getPendingApplications() {
-    try {
-      readLock.lock();
+  public synchronized List<FiCaSchedulerApp> getPendingApplications() {
+
       List<FiCaSchedulerApp> apps = new ArrayList<>();
       for (CSQueue childQueue : getChildQueues()) {
         apps.addAll(((LeafQueue) childQueue).getPendingApplications());
       }
       return Collections.unmodifiableList(apps);
-    } finally {
-      readLock.unlock();
-    }
+
   }
 
-  public List<FiCaSchedulerApp> getAllApplications() {
-    try {
-      readLock.lock();
+  public synchronized List<FiCaSchedulerApp> getAllApplications() {
+
       List<FiCaSchedulerApp> apps = new ArrayList<>();
       for (CSQueue childQueue : getChildQueues()) {
         apps.addAll(((LeafQueue) childQueue).getAllApplications());
       }
       return Collections.unmodifiableList(apps);
-    } finally {
-      readLock.unlock();
-    }
+
   }
 
   public String getLeafQueueConfigPrefix(CapacitySchedulerConfiguration conf) {
@@ -287,11 +268,9 @@ public class ManagedParentQueue extends AbstractManagedParentQueue {
    *
    * @param queueManagementChanges
    */
-  public void validateAndApplyQueueManagementChanges(
+  public synchronized void validateAndApplyQueueManagementChanges(
       List<QueueManagementChange> queueManagementChanges)
       throws IOException, SchedulerDynamicEditException {
-    try {
-      writeLock.lock();
 
       validateQueueManagementChanges(queueManagementChanges);
 
@@ -303,9 +282,6 @@ public class ManagedParentQueue extends AbstractManagedParentQueue {
       //acquires write lock on policy
       policy.commitQueueManagementChanges(queueManagementChanges);
 
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   public void validateQueueManagementChanges(

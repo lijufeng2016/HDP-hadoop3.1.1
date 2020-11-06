@@ -562,11 +562,7 @@ public class ProportionalCapacityPreemptionPolicy
   private TempQueuePerPartition cloneQueues(CSQueue curQueue,
       Resource partitionResource, String partitionToLookAt) {
     TempQueuePerPartition ret;
-    ReadLock readLock = curQueue.getReadLock();
-    try {
-      // Acquire a read lock from Parent/LeafQueue.
-      readLock.lock();
-
+    synchronized (this){
       String queueName = curQueue.getQueueName();
       QueueCapacities qc = curQueue.getQueueCapacities();
       float absCap = qc.getAbsoluteCapacity(partitionToLookAt);
@@ -626,8 +622,6 @@ public class ProportionalCapacityPreemptionPolicy
           subq.parent = ret;
         }
       }
-    } finally {
-      readLock.unlock();
     }
 
     addTempQueuePartition(ret);

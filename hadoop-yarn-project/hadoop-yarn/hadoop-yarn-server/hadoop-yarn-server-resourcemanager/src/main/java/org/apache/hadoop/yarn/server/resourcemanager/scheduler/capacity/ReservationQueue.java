@@ -51,10 +51,8 @@ public class ReservationQueue extends AbstractAutoCreatedLeafQueue {
   }
 
   @Override
-  public void reinitialize(CSQueue newlyParsedQueue,
+  public synchronized void reinitialize(CSQueue newlyParsedQueue,
       Resource clusterResource) throws IOException {
-    try {
-      writeLock.lock();
       // Sanity check
       if (!(newlyParsedQueue instanceof ReservationQueue) || !newlyParsedQueue
           .getQueuePath().equals(getQueuePath())) {
@@ -70,9 +68,6 @@ public class ReservationQueue extends AbstractAutoCreatedLeafQueue {
           parent.getUserLimitFactor(),
           parent.getMaxApplicationsForReservations(),
           parent.getMaxApplicationsPerUserForReservation());
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private void updateQuotas(int userLimit, float userLimitFactor,

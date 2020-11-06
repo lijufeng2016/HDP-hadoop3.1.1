@@ -47,10 +47,8 @@ public class AutoCreatedLeafQueue extends AbstractAutoCreatedLeafQueue {
   }
 
   @Override
-  public void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
+  public synchronized void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
       throws IOException {
-    try {
-      writeLock.lock();
 
       validate(newlyParsedQueue);
 
@@ -63,17 +61,10 @@ public class AutoCreatedLeafQueue extends AbstractAutoCreatedLeafQueue {
       // queueCapacities to initialize to configured capacity which might
       // overcommit resources from parent queue
       updateCapacitiesToZero();
-
-    } finally {
-      writeLock.unlock();
-    }
   }
 
-  public void reinitializeFromTemplate(AutoCreatedLeafQueueConfig
+  public synchronized void reinitializeFromTemplate(AutoCreatedLeafQueueConfig
       leafQueueTemplate) throws SchedulerDynamicEditException, IOException {
-
-    try {
-      writeLock.lock();
 
       // TODO:
       // reinitialize only capacities for now since 0 capacity updates
@@ -96,9 +87,6 @@ public class AutoCreatedLeafQueue extends AbstractAutoCreatedLeafQueue {
       //activate applications if any are pending
       activateApplications();
 
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private void mergeCapacities(QueueCapacities capacities) {

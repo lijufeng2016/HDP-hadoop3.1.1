@@ -123,10 +123,8 @@ public class ParentQueue extends AbstractCSQueue {
         queueOrderingPolicy.getConfigName();
   }
 
-  protected void setupQueueConfigs(Resource clusterResource)
+  protected synchronized void setupQueueConfigs(Resource clusterResource)
       throws IOException {
-    try {
-      writeLock.lock();
       super.setupQueueConfigs(clusterResource);
       StringBuilder aclsString = new StringBuilder();
       for (Map.Entry<AccessType, AccessControlList> e : acls.entrySet()) {
@@ -157,16 +155,11 @@ public class ParentQueue extends AbstractCSQueue {
           + ", reservationsContinueLooking=" + reservationsContinueLooking
           + ", orderingPolicy=" + getQueueOrderingPolicyConfigName()
           + ", priority=" + priority);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private static float PRECISION = 0.0005f; // 0.05% precision
 
-  void setChildQueues(Collection<CSQueue> childQueues) {
-    try {
-      writeLock.lock();
+  synchronized void setChildQueues(Collection<CSQueue> childQueues) {
       // Validate
       float childCapacities = 0;
       Resource minResDefaultLabel = Resources.createResource(0, 0);
@@ -248,16 +241,11 @@ public class ParentQueue extends AbstractCSQueue {
       if (LOG.isDebugEnabled()) {
         LOG.debug("setChildQueues: " + getChildQueuesToPrint());
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
-  public QueueInfo getQueueInfo(
+  public synchronized QueueInfo getQueueInfo(
       boolean includeChildQueues, boolean recursive) {
-    try {
-      readLock.lock();
       QueueInfo queueInfo = getQueueInfo();
 
       List<QueueInfo> childQueuesInfo = new ArrayList<>();
@@ -270,16 +258,10 @@ public class ParentQueue extends AbstractCSQueue {
       queueInfo.setChildQueues(childQueuesInfo);
 
       return queueInfo;
-    } finally {
-      readLock.unlock();
-    }
-
   }
 
-  private QueueUserACLInfo getUserAclInfo(
+  private synchronized QueueUserACLInfo getUserAclInfo(
       UserGroupInformation user) {
-    try {
-      readLock.lock();
       QueueUserACLInfo userAclInfo = recordFactory.newRecordInstance(
           QueueUserACLInfo.class);
       List<QueueACL> operations = new ArrayList<QueueACL>();
@@ -292,17 +274,12 @@ public class ParentQueue extends AbstractCSQueue {
       userAclInfo.setQueueName(getQueueName());
       userAclInfo.setUserAcls(operations);
       return userAclInfo;
-    } finally {
-      readLock.unlock();
-    }
 
   }
   
   @Override
-  public List<QueueUserACLInfo> getQueueUserAclInfo(
+  public synchronized List<QueueUserACLInfo> getQueueUserAclInfo(
       UserGroupInformation user) {
-    try {
-      readLock.lock();
       List<QueueUserACLInfo> userAcls = new ArrayList<>();
 
       // Add parent queue acls
@@ -314,10 +291,6 @@ public class ParentQueue extends AbstractCSQueue {
       }
 
       return userAcls;
-    } finally {
-      readLock.unlock();
-    }
-
   }
 
   public String toString() {
@@ -332,10 +305,8 @@ public class ParentQueue extends AbstractCSQueue {
   }
   
   @Override
-  public void reinitialize(CSQueue newlyParsedQueue,
+  public synchronized void reinitialize(CSQueue newlyParsedQueue,
       Resource clusterResource) throws IOException {
-    try {
-      writeLock.lock();
       // Sanity check
       if (!(newlyParsedQueue instanceof ParentQueue) || !newlyParsedQueue
           .getQueuePath().equals(getQueuePath())) {
@@ -413,9 +384,6 @@ public class ParentQueue extends AbstractCSQueue {
 
       // Make sure we notifies QueueOrderingPolicy
       queueOrderingPolicy.setQueues(childQueues);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private Map<String, CSQueue> getQueuesMap(List<CSQueue> queues) {
@@ -430,14 +398,11 @@ public class ParentQueue extends AbstractCSQueue {
   public void submitApplication(ApplicationId applicationId, String user,
       String queue) throws AccessControlException {
 
-    try {
-      writeLock.lock();
+    synchronized (this){
       // Sanity check
       validateSubmitApplication(applicationId, user, queue);
 
       addApplication(applicationId, user);
-    } finally {
-      writeLock.unlock();
     }
     
     // Inform the parent queue
@@ -453,10 +418,9 @@ public class ParentQueue extends AbstractCSQueue {
     }
   }
 
-  public void validateSubmitApplication(ApplicationId applicationId,
+  public synchronized void validateSubmitApplication(ApplicationId applicationId,
       String userName, String queue) throws AccessControlException {
-    try {
-      writeLock.lock();
+
       if (queue.equals(queueName)) {
         throw new AccessControlException(
             "Cannot submit application " + "to non-leaf queue: " + queueName);
@@ -467,9 +431,6 @@ public class ParentQueue extends AbstractCSQueue {
             + " is STOPPED. Cannot accept submission of application: "
             + applicationId);
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
@@ -484,20 +445,15 @@ public class ParentQueue extends AbstractCSQueue {
     // finish attempt logic.
   }
 
-  private void addApplication(ApplicationId applicationId,
+  private synchronized void addApplication(ApplicationId applicationId,
       String user) {
 
-    try {
-      writeLock.lock();
       ++numApplications;
 
       LOG.info(
           "Application added -" + " appId: " + applicationId + " user: " + user
               + " leaf-queue of parent: " + getQueueName() + " #applications: "
               + getNumApplications());
-    } finally {
-      writeLock.unlock();
-    }
   }
   
   @Override
@@ -513,18 +469,14 @@ public class ParentQueue extends AbstractCSQueue {
     }
   }
 
-  private void removeApplication(ApplicationId applicationId,
+  private synchronized void removeApplication(ApplicationId applicationId,
       String user) {
-    try {
-      writeLock.lock();
+
       --numApplications;
 
       LOG.info("Application removed -" + " appId: " + applicationId + " user: "
           + user + " leaf-queue of parent: " + getQueueName()
           + " #applications: " + getNumApplications());
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private String getParentName() {
@@ -851,10 +803,8 @@ public class ParentQueue extends AbstractCSQueue {
     }
   }
 
-  private void internalReleaseResource(Resource clusterResource,
+  private synchronized void internalReleaseResource(Resource clusterResource,
       FiCaSchedulerNode node, Resource releasedResource) {
-    try {
-      writeLock.lock();
       super.releaseResource(clusterResource, releasedResource,
           node.getPartition());
 
@@ -862,10 +812,6 @@ public class ParentQueue extends AbstractCSQueue {
         LOG.debug(
             "completedContainer " + this + ", cluster=" + clusterResource);
       }
-
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
@@ -888,10 +834,8 @@ public class ParentQueue extends AbstractCSQueue {
   }
 
   @Override
-  public void updateClusterResource(Resource clusterResource,
+  public synchronized void updateClusterResource(Resource clusterResource,
       ResourceLimits resourceLimits) {
-    try {
-      writeLock.lock();
 
       // Update effective capacity in all parent queue.
       Set<String> configuredNodelabels = csContext.getConfiguration()
@@ -911,9 +855,6 @@ public class ParentQueue extends AbstractCSQueue {
 
       CSQueueUtils.updateQueueStatistics(resourceCalculator, clusterResource,
           this, labelManager, null);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
@@ -1127,14 +1068,8 @@ public class ParentQueue extends AbstractCSQueue {
   }
 
   @Override
-  public List<CSQueue> getChildQueues() {
-    try {
-      readLock.lock();
+  public synchronized List<CSQueue> getChildQueues() {
       return new ArrayList<CSQueue>(childQueues);
-    } finally {
-      readLock.unlock();
-    }
-
   }
   
   @Override
@@ -1148,14 +1083,11 @@ public class ParentQueue extends AbstractCSQueue {
     }
 
     // Careful! Locking order is important!
-    try {
-      writeLock.lock();
+    synchronized (this){
       FiCaSchedulerNode node = scheduler.getNode(
           rmContainer.getContainer().getNodeId());
       allocateResource(clusterResource,
           rmContainer.getContainer().getResource(), node.getPartition());
-    } finally {
-      writeLock.unlock();
     }
 
     if (parent != null) {
@@ -1170,16 +1102,11 @@ public class ParentQueue extends AbstractCSQueue {
   }
 
   @Override
-  public void collectSchedulerApplications(
+  public synchronized void collectSchedulerApplications(
       Collection<ApplicationAttemptId> apps) {
-    try {
-      readLock.lock();
       for (CSQueue queue : childQueues) {
         queue.collectSchedulerApplications(apps);
       }
-    } finally {
-      readLock.unlock();
-    }
 
   }
 
@@ -1226,10 +1153,8 @@ public class ParentQueue extends AbstractCSQueue {
     return numApplications;
   }
 
-  void allocateResource(Resource clusterResource,
+  synchronized void allocateResource(Resource clusterResource,
       Resource resource, String nodePartition) {
-    try {
-      writeLock.lock();
       super.allocateResource(clusterResource, resource, nodePartition);
 
       /**
@@ -1274,9 +1199,6 @@ public class ParentQueue extends AbstractCSQueue {
               clusterResource);
         }
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private void killContainersToEnforceMaxQueueCapacity(String partition,
@@ -1326,8 +1248,7 @@ public class ParentQueue extends AbstractCSQueue {
 
       // Do not modify queue when allocation from reserved container
       if (allocation.getAllocateFromReservedContainer() == null) {
-        try {
-          writeLock.lock();
+        synchronized (this){
           // Book-keeping
           // Note: Update headroom to account for current allocation too...
           allocateResource(cluster, allocation.getAllocatedOrReservedResource(),
@@ -1337,8 +1258,6 @@ public class ParentQueue extends AbstractCSQueue {
               + " usedCapacity=" + getUsedCapacity() + " absoluteUsedCapacity="
               + getAbsoluteUsedCapacity() + " used=" + queueUsage.getUsed()
               + " cluster=" + cluster);
-        } finally {
-          writeLock.unlock();
         }
       }
     }
@@ -1349,9 +1268,7 @@ public class ParentQueue extends AbstractCSQueue {
   }
 
   @Override
-  public void stopQueue() {
-    try {
-      this.writeLock.lock();
+  public synchronized void stopQueue() {
       if (getNumApplications() > 0) {
         updateQueueState(QueueState.DRAINING);
       } else {
@@ -1362,9 +1279,6 @@ public class ParentQueue extends AbstractCSQueue {
           child.stopQueue();
         }
       }
-    } finally {
-      this.writeLock.unlock();
-    }
   }
 
   public QueueOrderingPolicy getQueueOrderingPolicy() {

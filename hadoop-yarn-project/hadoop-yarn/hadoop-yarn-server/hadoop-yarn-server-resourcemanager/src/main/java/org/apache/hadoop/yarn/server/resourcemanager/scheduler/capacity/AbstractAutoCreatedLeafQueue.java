@@ -75,10 +75,8 @@ public class AbstractAutoCreatedLeafQueue extends LeafQueue {
    *                    maxCapacity, etc..)
    * @throws SchedulerDynamicEditException
    */
-  public void setEntitlement(String nodeLabel, QueueEntitlement entitlement)
+  public synchronized void setEntitlement(String nodeLabel, QueueEntitlement entitlement)
       throws SchedulerDynamicEditException {
-    try {
-      writeLock.lock();
       float capacity = entitlement.getCapacity();
       if (capacity < 0 || capacity > 1.0f) {
         throw new SchedulerDynamicEditException(
@@ -101,9 +99,6 @@ public class AbstractAutoCreatedLeafQueue extends LeafQueue {
       CSQueueUtils.updateQueueStatistics(resourceCalculator,
           csContext.getClusterResource(),
           this, labelManager, nodeLabel);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   protected void setupConfigurableCapacities(QueueCapacities queueCapacities) {
