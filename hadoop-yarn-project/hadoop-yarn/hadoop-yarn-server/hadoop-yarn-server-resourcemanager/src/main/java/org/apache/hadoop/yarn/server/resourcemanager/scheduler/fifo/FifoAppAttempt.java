@@ -51,10 +51,8 @@ public class FifoAppAttempt extends FiCaSchedulerApp {
     super(appAttemptId, user, queue, activeUsersManager, rmContext);
   }
 
-  public RMContainer allocate(NodeType type, FiCaSchedulerNode node,
+  public synchronized RMContainer allocate(NodeType type, FiCaSchedulerNode node,
       SchedulerRequestKey schedulerKey, Container container) {
-    try {
-      writeLock.lock();
 
       if (isStopped) {
         return null;
@@ -104,8 +102,5 @@ public class FifoAppAttempt extends FiCaSchedulerApp {
           getApplicationId(), containerId, container.getResource());
 
       return rmContainer;
-    } finally {
-      writeLock.unlock();
-    }
   }
 }

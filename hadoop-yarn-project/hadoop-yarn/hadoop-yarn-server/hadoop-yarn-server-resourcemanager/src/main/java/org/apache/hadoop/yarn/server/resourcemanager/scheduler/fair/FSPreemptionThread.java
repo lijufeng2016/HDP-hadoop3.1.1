@@ -46,7 +46,6 @@ class FSPreemptionThread extends Thread {
   private final long warnTimeBeforeKill;
   private final long delayBeforeNextStarvationCheck;
   private final Timer preemptionTimer;
-  private final Lock schedulerReadLock;
 
   @SuppressWarnings("deprecation")
   FSPreemptionThread(FairScheduler scheduler) {
@@ -66,7 +65,6 @@ class FSPreemptionThread extends Thread {
         : 4 * scheduler.getNMHeartbeatInterval()); // 4 heartbeats
     delayBeforeNextStarvationCheck = warnTimeBeforeKill + allocDelay +
         fsConf.getWaitTimeBeforeNextStarvationCheck();
-    schedulerReadLock = scheduler.getSchedulerReadLock();
   }
 
   @Override
@@ -76,11 +74,8 @@ class FSPreemptionThread extends Thread {
         FSAppAttempt starvedApp = context.getStarvedApps().take();
         // Hold the scheduler readlock so this is not concurrent with the
         // update thread.
-        schedulerReadLock.lock();
-        try {
+        synchronized (this){
           preemptContainers(identifyContainersToPreempt(starvedApp));
-        } finally {
-          schedulerReadLock.unlock();
         }
         starvedApp.preemptionTriggered(delayBeforeNextStarvationCheck);
       } catch (InterruptedException e) {

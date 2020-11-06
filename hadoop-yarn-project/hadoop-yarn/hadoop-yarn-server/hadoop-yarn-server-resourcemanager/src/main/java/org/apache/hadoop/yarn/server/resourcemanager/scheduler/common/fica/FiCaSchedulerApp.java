@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -174,11 +173,10 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
         activitiesManager);
   }
 
-  public boolean containerCompleted(RMContainer rmContainer,
+  public synchronized boolean containerCompleted(RMContainer rmContainer,
       ContainerStatus containerStatus, RMContainerEventType event,
       String partition) {
-    try {
-      writeLock.lock();
+
       ContainerId containerId = rmContainer.getContainerId();
 
       // Remove from the list of containers
@@ -208,15 +206,11 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
       lastMemoryAggregateAllocationUpdateTime = -1;
 
       return true;
-    } finally {
-      writeLock.unlock();
-    }
   }
 
-  public RMContainer allocate(FiCaSchedulerNode node,
+  public synchronized RMContainer allocate(FiCaSchedulerNode node,
       SchedulerRequestKey schedulerKey, Container container) {
-    try {
-      readLock.lock();
+
 
       if (isStopped) {
         return null;
@@ -248,9 +242,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
       updateAMContainerDiagnostics(AMState.ASSIGNED, null);
 
       return rmContainer;
-    } finally {
-      readLock.unlock();
-    }
+
   }
 
   private boolean rmContainerInFinalState(RMContainer rmContainer) {
@@ -407,8 +399,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     ContainerRequest containerRequest = null;
     boolean reReservation = false;
 
-    try {
-      readLock.lock();
+    synchronized (this) {
 
       // First make sure no container in release list in final state
       if (anyContainerInFinalState(request)) {
@@ -505,8 +496,6 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
           }
         }
       }
-    } finally {
-      readLock.unlock();
     }
 
     // Skip check parent if this is a re-reservation container
@@ -530,8 +519,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
       FiCaSchedulerNode> request, boolean updatePending) {
     boolean reReservation = false;
 
-    try {
-      writeLock.lock();
+    synchronized (this) {
 
       // If we allocated something
       if (request.anythingAllocatedOrReserved()) {
@@ -641,10 +629,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
               .getAllocatedOrReservedResource());
         }
       }
-    } finally {
-      writeLock.unlock();
     }
-
     // Don't bother CS leaf queue if it is a re-reservation
     if (!reReservation) {
       getCSLeafQueue().apply(cluster, request);
@@ -652,10 +637,9 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     return true;
   }
 
-  public boolean unreserve(SchedulerRequestKey schedulerKey,
+  public synchronized boolean unreserve(SchedulerRequestKey schedulerKey,
       FiCaSchedulerNode node, RMContainer rmContainer) {
-    try {
-      writeLock.lock();
+
       // Done with the reservation?
       if (internalUnreserve(node, schedulerKey)) {
         node.unreserveResource(this);
@@ -668,9 +652,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
         return true;
       }
       return false;
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   private boolean internalUnreserve(FiCaSchedulerNode node,
@@ -709,9 +691,8 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     return false;
   }
 
-  public Map<String, Resource> getTotalPendingRequestsPerPartition() {
-    try {
-      readLock.lock();
+  public synchronized Map<String, Resource> getTotalPendingRequestsPerPartition() {
+
 
       Map<String, Resource> ret = new HashMap<>();
       for (SchedulerRequestKey schedulerKey : appSchedulingInfo
@@ -735,22 +716,17 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
       }
 
       return ret;
-    } finally {
-      readLock.unlock();
-    }
+
 
   }
 
-  public void markContainerForPreemption(ContainerId cont) {
-    try {
-      writeLock.lock();
+  public synchronized void markContainerForPreemption(ContainerId cont) {
+
       // ignore already completed containers
       if (liveContainers.containsKey(cont)) {
         containersToPreempt.add(cont);
       }
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   /**
@@ -763,10 +739,9 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
    * @param minimumAllocation minimumAllocation
    * @return an allocation
    */
-  public Allocation getAllocation(ResourceCalculator resourceCalculator,
+  public synchronized Allocation getAllocation(ResourceCalculator resourceCalculator,
       Resource clusterResource, Resource minimumAllocation) {
-    try {
-      writeLock.lock();
+
       Set<ContainerId> currentContPreemption = Collections.unmodifiableSet(
           new HashSet<ContainerId>(containersToPreempt));
       containersToPreempt.clear();
@@ -795,9 +770,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
           newlyIncreasedContainers, newlyDecreasedContainers,
           newlyPromotedContainers, newlyDemotedContainers,
           previousAttemptContainers);
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   @VisibleForTesting
@@ -832,40 +805,31 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     return null;
   }
 
-  public void setHeadroomProvider(
+  public synchronized void setHeadroomProvider(
     CapacityHeadroomProvider headroomProvider) {
-    try {
-      writeLock.lock();
+
       this.headroomProvider = headroomProvider;
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   @Override
-  public Resource getHeadroom() {
-    try {
-      readLock.lock();
+  public synchronized Resource getHeadroom() {
+
       if (headroomProvider != null) {
         return headroomProvider.getHeadroom();
       }
       return super.getHeadroom();
-    } finally {
-      readLock.unlock();
-    }
+
 
   }
 
   @Override
-  public void transferStateFromPreviousAttempt(
+  public synchronized void transferStateFromPreviousAttempt(
       SchedulerApplicationAttempt appAttempt) {
-    try {
-      writeLock.lock();
+
       super.transferStateFromPreviousAttempt(appAttempt);
       this.headroomProvider = ((FiCaSchedulerApp) appAttempt).headroomProvider;
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   public void reserve(SchedulerRequestKey schedulerKey, FiCaSchedulerNode node,
@@ -885,10 +849,9 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
   }
 
   @VisibleForTesting
-  public RMContainer findNodeToUnreserve(FiCaSchedulerNode node,
+  public synchronized RMContainer findNodeToUnreserve(FiCaSchedulerNode node,
       SchedulerRequestKey schedulerKey, Resource minimumUnreservedResource) {
-    try {
-      readLock.lock();
+
       // need to unreserve some other container first
       NodeId idToUnreserve = getNodeIdToUnreserve(schedulerKey,
           minimumUnreservedResource, rc);
@@ -917,9 +880,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
           nodeToUnreserve.getReservedContainer().getReservedResource());
 
       return nodeToUnreserve.getReservedContainer();
-    } finally {
-      readLock.unlock();
-    }
+
   }
 
   public LeafQueue getCSLeafQueue() {
@@ -1069,12 +1030,8 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
    * Capacity Scheduler.
    */
   @Override
-  public ApplicationResourceUsageReport getResourceUsageReport() {
-    try {
-      // Use write lock here because
-      // SchedulerApplicationAttempt#getResourceUsageReport updated fields
-      // TODO: improve this
-      writeLock.lock();
+  public synchronized ApplicationResourceUsageReport getResourceUsageReport() {
+
       ApplicationResourceUsageReport report = super.getResourceUsageReport();
       Resource cluster = rmContext.getScheduler().getClusterResource();
       Resource totalPartitionRes =
@@ -1093,14 +1050,10 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
         report.setQueueUsagePercentage(queueUsagePerc);
       }
       return report;
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
-  public ReentrantReadWriteLock.WriteLock getWriteLock() {
-    return this.writeLock;
-  }
+
 
   public void addToBeRemovedIncreaseRequest(
       SchedContainerChangeRequest request) {
@@ -1135,10 +1088,9 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
    *
    * @return succeeded or not
    */
-  public boolean moveReservation(RMContainer reservedContainer,
+  public synchronized boolean moveReservation(RMContainer reservedContainer,
       FiCaSchedulerNode sourceNode, FiCaSchedulerNode targetNode) {
-    try {
-      writeLock.lock();
+
       if (!sourceNode.getPartition().equals(targetNode.getPartition())) {
         if (LOG.isDebugEnabled()) {
           LOG.debug(
@@ -1199,8 +1151,5 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
 
         return true;
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 }

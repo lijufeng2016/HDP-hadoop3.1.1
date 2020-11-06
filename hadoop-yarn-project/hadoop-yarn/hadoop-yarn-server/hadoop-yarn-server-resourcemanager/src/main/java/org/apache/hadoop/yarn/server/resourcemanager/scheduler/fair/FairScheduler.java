@@ -104,8 +104,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
+
 
 /**
  * A scheduler that schedules resources between a set of queues. The scheduler
@@ -338,20 +337,16 @@ public class FairScheduler extends
     FSQueue rootQueue = queueMgr.getRootQueue();
 
     // Update demands and fairshares
-    writeLock.lock();
-    try {
+    synchronized (this){
       // Recursively update demands for all queues
       rootQueue.updateDemand();
       rootQueue.update(getClusterResource());
 
       // Update metrics
       updateRootQueueMetrics();
-    } finally {
-      writeLock.unlock();
     }
 
-    readLock.lock();
-    try {
+    synchronized (this){
       // Update starvation stats and identify starved applications
       if (shouldAttemptPreemption()) {
         for (FSLeafQueue queue : queueMgr.getLeafQueues()) {
@@ -366,8 +361,6 @@ public class FairScheduler extends
           dumpSchedulerState();
         }
       }
-    } finally {
-      readLock.unlock();
     }
     fsOpDurations.addUpdateThreadRunDuration(getClock().getTime() - start);
   }
@@ -469,8 +462,7 @@ public class FairScheduler extends
       return;
     }
 
-    try {
-      writeLock.lock();
+    synchronized (this){
       RMApp rmApp = rmContext.getRMApps().get(applicationId);
       FSLeafQueue queue = assignToQueue(rmApp, queueName, user);
       if (queue == null) {
@@ -516,20 +508,17 @@ public class FairScheduler extends
         rmContext.getDispatcher().getEventHandler().handle(
             new RMAppEvent(applicationId, RMAppEventType.APP_ACCEPTED));
       }
-    } finally {
-      writeLock.unlock();
     }
   }
 
   /**
    * Add a new application attempt to the scheduler.
    */
-  protected void addApplicationAttempt(
+  protected synchronized void addApplicationAttempt(
       ApplicationAttemptId applicationAttemptId,
       boolean transferStateFromPreviousAttempt,
       boolean isAttemptRecovering) {
-    try {
-      writeLock.lock();
+
       SchedulerApplication<FSAppAttempt> application = applications.get(
           applicationAttemptId.getApplicationId());
       String user = application.getUser();
@@ -566,9 +555,7 @@ public class FairScheduler extends
             new RMAppAttemptEvent(applicationAttemptId,
                 RMAppAttemptEventType.ATTEMPT_ADDED));
       }
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   /**
@@ -631,11 +618,10 @@ public class FairScheduler extends
     }
   }
 
-  private void removeApplicationAttempt(
+  private synchronized void removeApplicationAttempt(
       ApplicationAttemptId applicationAttemptId,
       RMAppAttemptState rmAppAttemptFinalState, boolean keepContainers) {
-    try {
-      writeLock.lock();
+
       LOG.info("Application " + applicationAttemptId + " is done. finalState="
               + rmAppAttemptFinalState);
       FSAppAttempt attempt = getApplicationAttempt(applicationAttemptId);
@@ -689,20 +675,16 @@ public class FairScheduler extends
       } else{
         maxRunningEnforcer.untrackNonRunnableApp(attempt);
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   /**
    * Clean up a completed container.
    */
   @Override
-  protected void completedContainerInternal(
+  protected synchronized void completedContainerInternal(
       RMContainer rmContainer, ContainerStatus containerStatus,
       RMContainerEventType event) {
-    try {
-      writeLock.lock();
+
       Container container = rmContainer.getContainer();
 
       // Get the application for the finished container
@@ -742,15 +724,12 @@ public class FairScheduler extends
             + " released container " + container.getId() + " on node: " +
             (node == null ? nodeID : node) + " with event: " + event);
       }
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
-  private void addNode(List<NMContainerStatus> containerReports,
+  private synchronized void addNode(List<NMContainerStatus> containerReports,
       RMNode node) {
-    try {
-      writeLock.lock();
+
       FSSchedulerNode schedulerNode = new FSSchedulerNode(node,
           usePortForNodeName);
       nodeTracker.addNode(schedulerNode);
@@ -765,14 +744,10 @@ public class FairScheduler extends
 
       recoverContainersOnNode(containerReports, node);
       updateRootQueueMetrics();
-    } finally {
-      writeLock.unlock();
-    }
   }
 
-  private void removeNode(RMNode rmNode) {
-    try {
-      writeLock.lock();
+  private synchronized void removeNode(RMNode rmNode) {
+
       NodeId nodeId = rmNode.getNodeID();
       FSSchedulerNode node = nodeTracker.getNode(nodeId);
       if (node == null) {
@@ -806,9 +781,6 @@ public class FairScheduler extends
 
       LOG.info("Removed node " + rmNode.getNodeAddress() + " cluster capacity: "
           + clusterResource);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
@@ -869,9 +841,7 @@ public class FairScheduler extends
     // Release containers
     releaseContainers(release, application);
 
-    ReentrantReadWriteLock.WriteLock lock = application.getWriteLock();
-    lock.lock();
-    try {
+    synchronized (this){
       if (!ask.isEmpty()) {
         if (LOG.isDebugEnabled()) {
           LOG.debug(
@@ -886,8 +856,6 @@ public class FairScheduler extends
         // TODO, handle SchedulingRequest
         application.showRequests();
       }
-    } finally {
-      lock.unlock();
     }
 
     Set<ContainerId> preemptionContainerIds =
@@ -926,9 +894,8 @@ public class FairScheduler extends
   }
 
   @Override
-  protected void nodeUpdate(RMNode nm) {
-    try {
-      writeLock.lock();
+  protected synchronized void nodeUpdate(RMNode nm) {
+
       long start = getClock().getTime();
       super.nodeUpdate(nm);
 
@@ -937,9 +904,6 @@ public class FairScheduler extends
 
       long duration = getClock().getTime() - start;
       fsOpDurations.addNodeUpdateDuration(duration);
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Deprecated
@@ -1027,9 +991,7 @@ public class FairScheduler extends
   }
 
   @VisibleForTesting
-  void attemptScheduling(FSSchedulerNode node) {
-    try {
-      writeLock.lock();
+  synchronized void attemptScheduling(FSSchedulerNode node) {
       if (rmContext.isWorkPreservingRecoveryEnabled() && !rmContext
           .isSchedulerReadyForAllocatingContainers()) {
         return;
@@ -1080,9 +1042,6 @@ public class FairScheduler extends
         }
       }
       updateRootQueueMetrics();
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   public FSAppAttempt getSchedulerApp(ApplicationAttemptId appAttemptId) {
@@ -1236,11 +1195,9 @@ public class FairScheduler extends
     }
   }
 
-  private String resolveReservationQueueName(String queueName,
+  private synchronized String resolveReservationQueueName(String queueName,
       ApplicationId applicationId, ReservationId reservationID,
       boolean isRecovering) {
-    try {
-      readLock.lock();
       FSQueue queue = queueMgr.getQueue(queueName);
       if ((queue == null) || !allocConf.isReservable(queue.getQueueName())) {
         return queueName;
@@ -1281,9 +1238,6 @@ public class FairScheduler extends
         queueName = getDefaultQueueForPlanQueue(queueName);
       }
       return queueName;
-    } finally {
-      readLock.unlock();
-    }
 
   }
 
@@ -1304,8 +1258,7 @@ public class FairScheduler extends
 
   @SuppressWarnings("deprecation")
   private void initScheduler(Configuration conf) throws IOException {
-    try {
-      writeLock.lock();
+    synchronized (this){
       this.conf = new FairSchedulerConfiguration(conf);
       validateConf(this.conf);
       authorizer = YarnAuthorizationProvider.getInstance(conf);
@@ -1364,8 +1317,6 @@ public class FairScheduler extends
       if (this.conf.getPreemptionEnabled()) {
         createPreemptionThread();
       }
-    } finally {
-      writeLock.unlock();
     }
 
     allocsLoader.init(conf);
@@ -1395,9 +1346,8 @@ public class FairScheduler extends
     reservationThreshold = newThreshold;
   }
 
-  private void startSchedulerThreads() {
-    try {
-      writeLock.lock();
+  private synchronized void startSchedulerThreads() {
+
       Preconditions.checkNotNull(allocsLoader, "allocsLoader is null");
       if (continuousSchedulingEnabled) {
         Preconditions.checkNotNull(schedulingThread,
@@ -1408,9 +1358,6 @@ public class FairScheduler extends
         preemptionThread.start();
       }
       allocsLoader.start();
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
@@ -1430,9 +1377,8 @@ public class FairScheduler extends
 
   @SuppressWarnings("deprecation")
   @Override
-  public void serviceStop() throws Exception {
-    try {
-      writeLock.lock();
+  public synchronized void serviceStop() throws Exception {
+
       if (continuousSchedulingEnabled) {
         if (schedulingThread != null) {
           schedulingThread.interrupt();
@@ -1446,10 +1392,6 @@ public class FairScheduler extends
       if (allocsLoader != null) {
         allocsLoader.stop();
       }
-    } finally {
-      writeLock.unlock();
-    }
-
     super.serviceStop();
   }
 
@@ -1492,10 +1434,9 @@ public class FairScheduler extends
   }
 
   @Override
-  public boolean checkAccess(UserGroupInformation callerUGI,
+  public synchronized boolean checkAccess(UserGroupInformation callerUGI,
       QueueACL acl, String queueName) {
-    try {
-      readLock.lock();
+
       FSQueue queue = getQueueManager().getQueue(queueName);
       if (queue == null) {
         if (LOG.isDebugEnabled()) {
@@ -1505,9 +1446,7 @@ public class FairScheduler extends
         return false;
       }
       return queue.hasAccess(acl, callerUGI);
-    } finally {
-      readLock.unlock();
-    }
+
   }
   
   public AllocationConfiguration getAllocationConfiguration() {
@@ -1518,13 +1457,11 @@ public class FairScheduler extends
       AllocationFileLoaderService.Listener {
 
     @Override
-    public void onReload(AllocationConfiguration queueInfo)
+    public synchronized void onReload(AllocationConfiguration queueInfo)
         throws IOException {
       // Commit the reload; also create any queue defined in the alloc file
       // if it does not already exist, so it can be displayed on the web UI.
 
-      writeLock.lock();
-      try {
         if (queueInfo == null) {
           authorizer.setPermission(allocsLoader.getDefaultPermissions(),
               UserGroupInformation.getCurrentUser());
@@ -1536,9 +1473,6 @@ public class FairScheduler extends
           applyChildDefaults();
           maxRunningEnforcer.updateRunnabilityOnReload();
         }
-      } finally {
-        writeLock.unlock();
-      }
     }
   }
 
@@ -1598,10 +1532,8 @@ public class FairScheduler extends
   }
 
   @Override
-  public String moveApplication(ApplicationId appId,
+  public synchronized String moveApplication(ApplicationId appId,
       String queueName) throws YarnException {
-    try {
-      writeLock.lock();
       SchedulerApplication<FSAppAttempt> app = applications.get(appId);
       if (app == null) {
         throw new YarnException("App to be moved " + appId + " not found.");
@@ -1609,8 +1541,7 @@ public class FairScheduler extends
       FSAppAttempt attempt = (FSAppAttempt) app.getCurrentAppAttempt();
       // To serialize with FairScheduler#allocate, synchronize on app attempt
 
-      try {
-        attempt.getWriteLock().lock();
+      synchronized (this){
         FSLeafQueue oldQueue = (FSLeafQueue) app.getQueue();
         // Check if the attempt is already stopped: don't move stopped app
         // attempt. The attempt has already been removed from all queues.
@@ -1635,19 +1566,12 @@ public class FairScheduler extends
 
         executeMove(app, attempt, oldQueue, targetQueue);
         return targetQueue.getQueueName();
-      } finally {
-        attempt.getWriteLock().unlock();
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   @Override
-  public void preValidateMoveApplication(ApplicationId appId, String newQueue)
+  public synchronized void preValidateMoveApplication(ApplicationId appId, String newQueue)
       throws YarnException {
-    try {
-      writeLock.lock();
       SchedulerApplication<FSAppAttempt> app = applications.get(appId);
       if (app == null) {
         throw new YarnException("App to be moved " + appId + " not found.");
@@ -1656,8 +1580,7 @@ public class FairScheduler extends
       FSAppAttempt attempt = app.getCurrentAppAttempt();
       // To serialize with FairScheduler#allocate, synchronize on app attempt
 
-      try {
-        attempt.getWriteLock().lock();
+      synchronized (this){
         FSLeafQueue oldQueue = (FSLeafQueue) app.getQueue();
         String destQueueName = handleMoveToPlanQueue(newQueue);
         FSLeafQueue targetQueue = queueMgr.getLeafQueue(destQueueName, false);
@@ -1669,12 +1592,7 @@ public class FairScheduler extends
         if (oldQueue.isRunnableApp(attempt)) {
           verifyMoveDoesNotViolateConstraints(attempt, oldQueue, targetQueue);
         }
-      } finally {
-        attempt.getWriteLock().unlock();
       }
-    } finally {
-      writeLock.unlock();
-    }
   }
 
   private void verifyMoveDoesNotViolateConstraints(FSAppAttempt app,
@@ -1776,17 +1694,14 @@ public class FairScheduler extends
    * Process resource update on a node and update Queue.
    */
   @Override
-  public void updateNodeResource(RMNode nm,
+  public synchronized void updateNodeResource(RMNode nm,
       ResourceOption resourceOption) {
-    try {
-      writeLock.lock();
+
       super.updateNodeResource(nm, resourceOption);
       updateRootQueueMetrics();
       queueMgr.getRootQueue().setSteadyFairShare(getClusterResource());
       queueMgr.getRootQueue().recomputeSteadyShares();
-    } finally {
-      writeLock.unlock();
-    }
+
   }
 
   /** {@inheritDoc} */
@@ -1857,9 +1772,6 @@ public class FairScheduler extends
     return nmHeartbeatInterval;
   }
 
-  ReadLock getSchedulerReadLock() {
-    return this.readLock;
-  }
 
   @Override
   public long checkAndGetApplicationLifetime(String queueName, long lifetime) {
