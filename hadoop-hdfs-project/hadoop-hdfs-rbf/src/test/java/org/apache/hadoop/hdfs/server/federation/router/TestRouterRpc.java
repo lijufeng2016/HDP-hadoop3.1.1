@@ -624,7 +624,7 @@ public class TestRouterRpc {
 
   @Test
   public void testProxyMkdir() throws Exception {
-
+    System.setProperty("HADOOP_USER_NAME","hdfs");
     // Check the initial folders
     FileStatus[] filesInitial = routerFS.listStatus(new Path("/"));
 
@@ -661,7 +661,7 @@ public class TestRouterRpc {
   @Test
   public void testProxyChmodFiles() throws Exception {
 
-    FsPermission permission = new FsPermission("444");
+    FsPermission permission = new FsPermission("777");
 
     // change permissions
     routerProtocol.setPermission(routerFile, permission);
@@ -673,7 +673,7 @@ public class TestRouterRpc {
     // Validate router failure response matches NN failure response.
     Method m = ClientProtocol.class.getMethod(
         "setPermission", String.class, FsPermission.class);
-    String badPath = "/unknownlocation/unknowndir";
+    String badPath = "/";
     compareResponses(routerProtocol, nnProtocol, m,
         new Object[] {badPath, permission});
   }

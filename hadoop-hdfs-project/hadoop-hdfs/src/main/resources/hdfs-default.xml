@@ -23,6 +23,16 @@
 <!-- there.  If hdfs-site.xml does not already exist, create it.      -->
 
 <configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://127.0.0.1:9000</value>
+  </property>
+
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/tmp</value>
+    <description>version of this configuration file</description>
+  </property>
 
 <property>
   <name>hadoop.hdfs.configuration.version</name>
@@ -452,7 +462,7 @@
 
 <property>
   <name>dfs.permissions.enabled</name>
-  <value>true</value>
+  <value>false</value>
   <description>
     If "true", enable permission checking in HDFS.
     If "false", permission checking is turned off,
