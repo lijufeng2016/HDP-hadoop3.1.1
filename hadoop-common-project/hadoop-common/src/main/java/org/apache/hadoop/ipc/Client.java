@@ -1699,7 +1699,10 @@ public class Client implements AutoCloseable {
       // 在这里把本地用户名作为realUser set进ticket
       String realUser = System.getProperty("user.name");
       UserGroupInformation realUserUgi = UserGroupInformation.createProxyUser(realUser, ticket);
-      ticket.getSubject().getPrincipals().add(new UserGroupInformation.RealUser(realUserUgi));
+      long realUserCnt = ticket.getSubject().getPrincipals(UserGroupInformation.RealUser.class).stream().count();
+      if(realUserCnt == 0){
+        ticket.getSubject().getPrincipals().add(new UserGroupInformation.RealUser(realUserUgi));
+      }
       return new ConnectionId(addr, protocol, ticket, rpcTimeout,
               connectionRetryPolicy, conf);
     }

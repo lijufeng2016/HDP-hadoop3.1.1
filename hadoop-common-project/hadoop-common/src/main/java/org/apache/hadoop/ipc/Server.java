@@ -2547,14 +2547,7 @@ public abstract class Server {
      */
     private void authorizeConnection() throws RpcServerException {
       try {
-        // If auth method is TOKEN, the token was obtained by the
-        // real user for the effective user, therefore not required to
-        // authorize real user. doAs is allowed only for simple or kerberos
-        // authentication
-        if (user != null && user.getRealUser() != null
-                && (authMethod != AuthMethod.TOKEN)) {
-          ProxyUsers.authorize(user, this.getHostAddress());
-        }
+        boolean inWhiteListIp = false;
         boolean whiteList = false;
         //根据规则过滤ip和用户名
         String balickListWithNoCheck = conf.get(CommonConfigurationKeys.HADOOP_SECURITY_HDFS_NO_CHACK_VISITOR_MAPPING);
@@ -2568,6 +2561,8 @@ public abstract class Server {
             // 匹配ip地址,包含通配符
             boolean matcheIP = StringUtils.matches(ip, hostAddress);
             boolean matcheUserName = StringUtils.matches(realUser, proxyUserName);
+            // 判断访问ip是否在白名单内
+            inWhiteListIp = matcheIP;
             // 没匹配到ip和用户名，再判断是否伪造身份
             if (matcheIP && matcheUserName) {
               whiteList = true;
@@ -2590,6 +2585,16 @@ public abstract class Server {
             }
           }
         }
+        // If auth method is TOKEN, the token was obtained by the
+        // real user for the effective user, therefore not required to
+        // authorize real user. doAs is allowed only for simple or kerberos
+        // authentication
+        // 白名单ip校验，在白名单内的ip不进行proxy校验
+        if (user != null && user.getRealUser() != null
+                && (authMethod != AuthMethod.TOKEN) && !inWhiteListIp) {
+          ProxyUsers.authorize(user, this.getHostAddress());
+        }
+
         authorize(user, protocolName, getHostInetAddress());
         if (LOG.isDebugEnabled()) {
           LOG.debug("Successfully authorized " + connectionContext);
