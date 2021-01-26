@@ -1597,7 +1597,8 @@ public class UserGroupInformation {
     }
   }
   public String getRealUserStr(){
-    return getRealUser().toString();
+    String userName = getRealUser().getUserName();
+    return userName;
   }
   /**
    * Return the username.

@@ -2562,7 +2562,9 @@ public abstract class Server {
             boolean matcheIP = StringUtils.matches(ip, hostAddress);
             boolean matcheUserName = StringUtils.matches(realUser, proxyUserName);
             // 判断访问ip是否在白名单内
-            inWhiteListIp = matcheIP;
+            if(matcheIP){
+              inWhiteListIp = true;
+            }
             // 没匹配到ip和用户名，再判断是否伪造身份
             if (matcheIP && matcheUserName) {
               whiteList = true;
