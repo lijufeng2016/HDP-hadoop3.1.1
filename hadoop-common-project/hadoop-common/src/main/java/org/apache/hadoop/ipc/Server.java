@@ -2555,8 +2555,10 @@ public abstract class Server {
                 && (authMethod != AuthMethod.TOKEN)) {
           ProxyUsers.authorize(user, this.getHostAddress());
         }
+        boolean whiteList = false;
         //根据规则过滤ip和用户名
         String balickListWithNoCheck = conf.get(CommonConfigurationKeys.HADOOP_SECURITY_HDFS_NO_CHACK_VISITOR_MAPPING);
+        String proxyUserName = user.getUserName();
         if(null != balickListWithNoCheck){
           String[] mappings = balickListWithNoCheck.split(",");
           for (int i = 0; i < mappings.length; i++) {
@@ -2565,28 +2567,27 @@ public abstract class Server {
             String realUser = mapping.split(":")[1];
             // 匹配ip地址,包含通配符
             boolean matcheIP = StringUtils.matches(ip, hostAddress);
-            String proxyUserName = user.getUserName();
             boolean matcheUserName = StringUtils.matches(realUser, proxyUserName);
             // 没匹配到ip和用户名，再判断是否伪造身份
             if (matcheIP && matcheUserName) {
-              break;
-            } else {
-              String realUserName = null;
-              try {
-                realUserName = user.getSubject().getPrincipals(UserGroupInformation.RealUser.class).stream().findFirst().get().getName();
-              } catch (Exception e) {
-                String message = "没有上报真实用户名，请联系管理员获取 hadoop-common.jar 包！ip：" + hostAddress + ",user：" + proxyUserName;
-                LOG.warn(message);
-                throw new FatalRpcServerException(
-                        RpcErrorCodeProto.FATAL_UNAUTHORIZED, message);
-              }
-              if (!proxyUserName.equals(realUserName)) {
-                String message = "禁止模拟其它用户访问hdfs，请联系管理员！ip：" + hostAddress + ",user：" + proxyUserName;
-                LOG.warn(message);
-                throw new AuthorizationException(message);
-              }
+              whiteList = true;
             }
-
+          }
+          if(!whiteList){
+            String realUserName = null;
+            try {
+              realUserName = user.getSubject().getPrincipals(UserGroupInformation.RealUser.class).stream().findFirst().get().getName();
+            } catch (Exception e) {
+              String message = "没有上报真实用户名，请联系管理员获取 hadoop-common.jar 包！ip：" + hostAddress + ",user：" + proxyUserName;
+              LOG.warn(message);
+              throw new FatalRpcServerException(
+                      RpcErrorCodeProto.FATAL_UNAUTHORIZED, message);
+            }
+            if (!proxyUserName.equals(realUserName)) {
+              String message = "禁止模拟其它用户访问hdfs，请联系管理员！ip：" + hostAddress + ",user：" + proxyUserName;
+              LOG.warn(message);
+              throw new AuthorizationException(message);
+            }
           }
         }
         authorize(user, protocolName, getHostInetAddress());
