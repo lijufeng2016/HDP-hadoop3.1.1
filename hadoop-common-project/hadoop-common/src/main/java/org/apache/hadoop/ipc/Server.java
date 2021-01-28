@@ -1635,6 +1635,7 @@ public abstract class Server {
 
     IpcConnectionContextProto connectionContext;
     String protocolName;
+    private String hdfsClientProtocolName = "org.apache.hadoop.hdfs.protocol.ClientProtocol";
     SaslServer saslServer;
     private AuthMethod authMethod;
     private AuthProtocol authProtocol;
@@ -2546,47 +2547,51 @@ public abstract class Server {
      * @throws RpcServerException - user is not allowed to proxy
      */
     private void authorizeConnection() throws RpcServerException {
-      try {
-        boolean inWhiteListIp = false;
-        boolean whiteList = false;
-        //根据规则过滤ip和用户名
-        String balickListWithNoCheck = conf.get(CommonConfigurationKeys.HADOOP_SECURITY_HDFS_NO_CHACK_VISITOR_MAPPING);
-        String proxyUserName = user.getUserName();
-        if(null != balickListWithNoCheck){
-          String[] mappings = balickListWithNoCheck.split(",");
-          for (int i = 0; i < mappings.length; i++) {
-            String mapping = mappings[i];
-            String ip = mapping.split(":")[0];
-            String realUser = mapping.split(":")[1];
-            // 匹配ip地址,包含通配符
-            boolean matcheIP = StringUtils.matches(ip, hostAddress);
-            boolean matcheUserName = StringUtils.matches(realUser, proxyUserName);
-            // 判断访问ip是否在白名单内
-            if(matcheIP){
-              inWhiteListIp = true;
+          boolean inWhiteListIp = false;
+          boolean whiteList = false;
+        // 判断protocol类型是hdfs的操作才进入规则
+        if (protocolName.equals(hdfsClientProtocolName)){
+          //根据规则过滤ip和用户名
+          String balickListWithNoCheck = conf.get(CommonConfigurationKeys.HADOOP_SECURITY_HDFS_NO_CHACK_VISITOR_MAPPING);
+          String proxyUserName = user.getUserName();
+          if(null != balickListWithNoCheck){
+            String[] mappings = balickListWithNoCheck.split(",");
+            for (int i = 0; i < mappings.length; i++) {
+              String mapping = mappings[i];
+              String ip = mapping.split(":")[0];
+              String realUser = mapping.split(":")[1];
+              // 匹配ip地址,包含通配符
+              boolean matcheIP = StringUtils.matches(ip, hostAddress);
+              boolean matcheUserName = StringUtils.matches(realUser, proxyUserName);
+              // 判断访问ip是否在白名单内
+              if(matcheIP){
+                inWhiteListIp = true;
+              }
+              // 没匹配到ip和用户名，再判断是否伪造身份
+              if (matcheIP && matcheUserName) {
+                whiteList = true;
+              }
             }
-            // 没匹配到ip和用户名，再判断是否伪造身份
-            if (matcheIP && matcheUserName) {
-              whiteList = true;
-            }
-          }
-          if(!whiteList){
-            String realUserName = null;
-            try {
-              realUserName = user.getSubject().getPrincipals(UserGroupInformation.RealUser.class).stream().findFirst().get().getName();
-            } catch (Exception e) {
-              String message = "没有上报真实用户名，请联系管理员获取 hadoop-common.jar 包！ip：" + hostAddress + ",user：" + proxyUserName;
-              LOG.warn(message);
-              throw new FatalRpcServerException(
-                      RpcErrorCodeProto.FATAL_UNAUTHORIZED, message);
-            }
-            if (!proxyUserName.equals(realUserName)) {
-              String message = "禁止模拟其它用户访问hdfs，请联系管理员！ip：" + hostAddress + ",user：" + proxyUserName;
-              LOG.warn(message);
-              throw new AuthorizationException(message);
+            if(!whiteList){
+              String realUserName = null;
+              try {
+                realUserName = user.getSubject().getPrincipals(UserGroupInformation.RealUser.class).stream().findFirst().get().getName();
+              } catch (Exception e) {
+                String message = "没有上报真实用户名，请联系管理员获取 hadoop-common.jar 包！ip：" + hostAddress + ",user：" + proxyUserName;
+                LOG.warn(message);
+                throw new FatalRpcServerException(
+                        RpcErrorCodeProto.FATAL_UNAUTHORIZED, message);
+              }
+              if (!proxyUserName.equals(realUserName)) {
+                String message = "禁止模拟其它用户访问hdfs，请联系管理员！ip：" + hostAddress + ",user：" + proxyUserName;
+                LOG.warn(message);
+                throw new FatalRpcServerException(
+                        RpcErrorCodeProto.FATAL_UNAUTHORIZED, message);
+              }
             }
           }
         }
+      try {
         // If auth method is TOKEN, the token was obtained by the
         // real user for the effective user, therefore not required to
         // authorize real user. doAs is allowed only for simple or kerberos
@@ -2596,7 +2601,6 @@ public abstract class Server {
                 && (authMethod != AuthMethod.TOKEN) && !inWhiteListIp) {
           ProxyUsers.authorize(user, this.getHostAddress());
         }
-
         authorize(user, protocolName, getHostInetAddress());
         if (LOG.isDebugEnabled()) {
           LOG.debug("Successfully authorized " + connectionContext);
