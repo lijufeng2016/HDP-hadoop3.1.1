@@ -1585,6 +1585,7 @@ public class Client implements AutoCloseable {
     private final int pingInterval; // how often sends ping to the server in msecs
     private String saslQop; // here for testing
     private final Configuration conf; // used to get the expected kerberos principal name
+    private static String hdfsClientProtocolName = "org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolPB";
 
     ConnectionId(InetSocketAddress address, Class<?> protocol,
                  UserGroupInformation ticket, int rpcTimeout,
@@ -1698,9 +1699,10 @@ public class Client implements AutoCloseable {
       }
       // 在这里把本地用户名作为realUser set进ticket
       String realUser = System.getProperty("user.name");
+
       UserGroupInformation realUserUgi = UserGroupInformation.createProxyUser(realUser, ticket);
       long realUserCnt = ticket.getSubject().getPrincipals(UserGroupInformation.RealUser.class).stream().count();
-      if(realUserCnt == 0){
+      if(realUserCnt == 0 && hdfsClientProtocolName.equals(protocol.getName())){
         ticket.getSubject().getPrincipals().add(new UserGroupInformation.RealUser(realUserUgi));
       }
       return new ConnectionId(addr, protocol, ticket, rpcTimeout,
